@@ -98,3 +98,30 @@ Changed: nothing.
 Rejected: nothing rejected — all rows passed on the first attempt. My final re-run after both fixes (`VERDICTS.md` §10.4) gave the same result: the error showed at 5097 ms, after the abort at 5055 ms.
 
 By hand: I wrote the one sentence from my §9 results, and I committed the fix myself as `e83e623`.
+
+## 2026-11-04 — IA#3: observing CSR vs SSR for `CSR-SSR.md`
+
+Tool: Claude Code (desktop app), model Claude Opus 5.5 (`claude-opus-5-5`). It used a Playwright 1.64.1 script driving headless Chromium 153, from a scratch folder outside the repo. It read `server.mjs`, `index.html`, `panel.js` and `c.js` only, and changed nothing in `public/`.
+
+Asked for: answer the five README "CSR vs SSR" questions by observation, not definition, for `/?v=c` and `/ssr`, with the server in mode `normal`:
+- the raw HTML source of each page;
+- the scarf line and the `escapeHtml` code behind it, compared with `textContent`;
+- both pages with JavaScript disabled;
+- with JavaScript on and cache disabled, the requests made before the stock value appears;
+- one sentence on when to render on the server and when in the browser.
+
+Write the answers in a new `CSR-SSR.md`.
+
+Kept: the observed values in `CSR-SSR.md`:
+- `/?v=c`'s source has 0 product names and `<output id="stock-value">—</output>`, while `/ssr`'s source has all 8 names and `12.360.000 đ`;
+- `/ssr`'s scarf line is `Scarf &lt;i&gt;limited&lt;/i&gt;` (from `escapeHtml`, server.mjs:67–71, 81), and the scarf's `.name` on `/?v=c` has 0 child elements;
+- without JavaScript, `/?v=c` has 0 cards and `—`, while `/ssr` has 8 cards and `12.360.000 đ`;
+- with JavaScript, `/?v=c` makes 14 requests before the total appears at 680 ms, while `/ssr` makes 2 and has the total in the HTML at 12 ms (first paint 52 ms).
+
+The server mode was `normal` before and after.
+
+Changed: in its first draft of answer 4, it described the CSR page's wait as "three rounds of requests (HTML → JS → products → stock)". The request list it had just recorded shows five dependent steps (`panel.js` imports `c.js`), so it corrected the sentence before handing the file over.
+
+Rejected: nothing rejected.
+
+By hand: I wrote the instructions for this step, which set what to observe and the file's format. Answer 5 is the assistant's judgement, not an observation.
