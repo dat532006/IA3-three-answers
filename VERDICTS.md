@@ -310,3 +310,88 @@ The predictions above (§1–8) were committed in `f05b449` **before** any run a
 | A | 2 | fix | 2 |
 | B | 6, 8 | fix | 6 (8 has the same cause) |
 | C | none | keep | all rows pass |
+
+---
+
+# 10. After the fixes
+
+The fixes were made by Claude Code, each from my one sentence in §9 and limited to one version file. I committed each fix myself, and only after the whole table had passed on it. The tables below come from one final re-run of the whole table on the three committed files, after both fixes.
+
+## 10.1 Fix commits
+
+| Version | Commit | Message (`git log`) |
+|---|---|---|
+| A | `b0b7f0e` (`b0b7f0ef17d608935f8c25b9c5bb88db8e6ca1f4`) | Fix version A: wait for all stock results with Promise.all before writing the total (row 2) |
+| B | `e83e623` (`e83e62376c073eddab33901b19389cd6ecdf6542`) | Fix version B: abort the products request after 5 s with AbortSignal.timeout (rows 6 and 8) |
+| C | none | unchanged since `starter` |
+
+**What changed.**
+
+- **A** (`a.js:52`, `a.js:55`, 2 lines): `products.forEach(async (p) => { … });` became `await Promise.all(products.map(async (p) => { … }));`. All 8 stock requests still start together. Line 56 now writes the total only after every stock result has been added.
+- **B** (`b.js:16`, 1 line): `fetch('/api/products', { timeout: 5000 })` became `fetch('/api/products', { signal: AbortSignal.timeout(5000) })`. The products request is now really cancelled after 5 s, so the existing `catch` shows the error and Retry. It also replaces the option the type checker reported as unknown.
+- **C**: no change. Verdict stays **keep**.
+
+## 10.2 How the re-run was done
+
+- On 2026-11-04 at about 21:14–21:16 (UTC+7), against the unmodified `node server.mjs` at `http://localhost:5050`. Each `?v=` was loaded from a fresh state with HEAD `e83e623` and a clean working tree.
+- Playwright 1.64.1 drove headless Chromium 153.0.8010.12, with cache disabled and no throttling. Modes were switched with `POST /__mode`, and the mode was set back to `normal` at the end.
+- Timings are milliseconds after navigation (Resource Timing for requests, DOM polling for the page).
+- Row 8: `tsc` 6.0.3, run as `tsc --project jsconfig.json --noEmit --pretty false` with the starter's `jsconfig.json`. `// @ts-check` was added as line 1 of one version file at a time and removed afterwards. Each file's SHA-256 was identical before and after, and `git status` was clean.
+- **Row 7 note.** This run has no DevTools open, so the DevTools `.well-known` 404 from §9 does not appear. Instead headless Chromium requests `/favicon.ico`, and the server answers 404. That line comes from the browser, not from any version file.
+
+## 10.3 Version A — fixed (`b0b7f0e`)
+
+| Row | Result | Measured |
+|---|---|---|
+| 1 | PASS | 8 cards in API order (tshirt … scarf), prices match the API (`180.000 đ` …), status line `""` |
+| 2 | **PASS** (was FAIL) | `12.360.000 đ` at 1014 ms and after the last stock response (560 ms). All 8 stock requests returned 200 |
+| 3 | PASS | `Scarf <i>limited</i>`, 0 child elements in `.name` |
+| 4 | PASS | `Loading products…` with 0 cards at 516 ms and 2515 ms. 8 cards at 3056 ms, then status `""` and `12.360.000 đ` |
+| 5 | PASS | `error`: `Could not load products.`, Retry visible, 0 cards. After `normal` + Retry: 8 cards, status `""`, Retry hidden, `12.360.000 đ` |
+| 6 | PASS | `/api/products` aborted at 5040 ms (started at 34 ms). `Could not load products.` + Retry at 5045 ms, still shown at 7035 ms, 0 cards |
+| 7 | PASS | 0 uncaught exceptions. Only the browser's own lines: `404` (`/favicon.ico`) and `500` (`error` mode) |
+| 8 | PASS | `tsc` exit 0, no output |
+| empty | PASS | `No products yet.`, `0 đ`, 0 cards, Retry hidden, no console errors |
+| parallel | PASS | All 8 `/api/stock` requests start between 55.0 and 55.4 ms (spread 0.4 ms) |
+
+## 10.4 Version B — fixed (`e83e623`)
+
+| Row | Result | Measured |
+|---|---|---|
+| 1 | PASS | 8 cards in API order, prices match the API, status line `""` |
+| 2 | PASS | `12.360.000 đ` at 1011 ms and after the last stock response (637 ms). All 8 stock requests returned 200 |
+| 3 | PASS | `Scarf <i>limited</i>`, 0 child elements in `.name` |
+| 4 | PASS | `Loading products…` with 0 cards at 509 ms and 2513 ms. 8 cards at 3047 ms, then status `""` and `12.360.000 đ` |
+| 5 | PASS | `error`: `Could not load products.`, Retry visible, 0 cards. After `normal` + Retry: 8 cards, status `""`, Retry hidden, `12.360.000 đ` |
+| 6 | **PASS** (was FAIL) | `/api/products` started at 53 ms and was aborted at 5055 ms. The page showed `Loading products…` at 5038 ms and `Could not load products.` + Retry at 5097 ms, still shown at 7030 ms, 0 cards. It no longer waits for the 504 at 30 s |
+| 7 | PASS | 0 uncaught exceptions. Only `404` (`/favicon.ico`) and `500` (`error` mode). The 504 line from §9 is gone, because the request is cancelled before the server answers |
+| 8 | **PASS** (was FAIL) | `tsc` exit 0, no output. The TS2353 at b.js:16 is gone |
+| empty | PASS | `No products yet.`, `0 đ`, 0 cards, Retry hidden, no console errors |
+| parallel | PASS | All 8 `/api/stock` requests start between 51.6 and 52.4 ms (spread 0.8 ms) |
+
+## 10.5 Version C — unchanged (keep)
+
+| Row | Result | Measured |
+|---|---|---|
+| 1 | PASS | 8 cards in API order, prices match the API, status line `""` |
+| 2 | PASS | `12.360.000 đ` at 1020 ms and after the last stock response (658 ms). All 8 stock requests returned 200 |
+| 3 | PASS | `Scarf <i>limited</i>`, 0 child elements in `.name` |
+| 4 | PASS | `Loading products…` with 0 cards at 504 ms and 2510 ms. 8 cards at 3068 ms, then status `""` and `12.360.000 đ` |
+| 5 | PASS | `error`: `Could not load products.`, Retry visible, 0 cards. After `normal` + Retry: 8 cards, status `""`, Retry hidden, `12.360.000 đ` |
+| 6 | PASS | `/api/products` started at 43 ms and was aborted at 5048 ms. `Loading products…` at 5033 ms, then `Could not load products.` + Retry at 5091 ms, still shown at 7030 ms, 0 cards |
+| 7 | PASS | 0 uncaught exceptions. Only `404` (`/favicon.ico`) and `500` (`error` mode) |
+| 8 | PASS | `tsc` exit 0, no output |
+| empty | PASS | `No products yet.`, `0 đ`, 0 cards, Retry hidden, no console errors |
+| parallel | PASS | All 8 `/api/stock` requests start between 51.6 and 52.0 ms (spread 0.4 ms) |
+
+## 10.6 Summary after the fixes
+
+| Version | Failed rows before | Failed rows now | Verdict now |
+|---|---|---|---|
+| A | 2 | none | fixed in `b0b7f0e`, nothing else changed |
+| B | 6, 8 | none | fixed in `e83e623`, nothing else changed |
+| C | none | none | keep (unchanged) |
+
+No row that passed in §9 fails after either fix.
+
+Not covered by any row: a failing `/api/stock` request. `/api/stock` answers 200 in every mode, so the table never exercises it. Since `b0b7f0e`, a failing stock request in A reaches `catch`, which removes the cards and shows `Could not load products.` with Retry. Before the fix it was an unhandled rejection. B and C also send stock failures to their `catch` through `Promise.all`; that is unchanged.

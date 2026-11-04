@@ -61,3 +61,40 @@ Rejected, all shown not to be real by a row:
 Its stock-failure points (A unhandled rejection, B/C behaviour when a stock request fails) are outside every row: in its own check `/api/stock` answered 200 in all five modes.
 
 By hand: I chose to run the review in a fresh session restricted to brief.md and the three files, and I read its claims table against my results before committing. No version file was changed.
+
+## 2026-11-04 — IA#3: fixing version A from my one sentence (row 2)
+
+Tool: Claude Code (desktop app), model Claude Opus 5.5 (`claude-opus-5-5`), in a new session. It used Node.js, a Playwright 1.64.1 script driving headless Chromium, and `tsc` 6.0.3 from the temp folder outside the repo. The script and package were in the session's scratch folder, outside the repo.
+
+Asked for: *"Row 2: in mode `normal` the Stock value stays `0 đ` even though all 8 `/api/stock` requests return 200 (the last at 671 ms) — `products.forEach(async …)` at a.js:52–55 is never awaited, so line 56 writes the total before any stock arrives; wait for all the stock results with `Promise.all` before writing the total, keep the 8 stock requests starting at the same time (no `await` inside a loop), and change only a.js."* After the fix it had to re-run rows 1–8, the empty row and the parallel check on `?v=a`.
+
+Kept: the 2-line change at a.js:52 and a.js:55. `products.forEach(async (p) => { … });` became `await Promise.all(products.map(async (p) => { … }));`. On its re-run, row 2 showed `12.360.000 đ` at 1017 ms, and the other rows still passed:
+- row 6: error + Retry at 5065 ms;
+- parallel: the 8 stock requests started within 1 ms of each other (67.1–68.1 ms);
+- row 8: `tsc` exit 0.
+
+It also pointed out a behaviour change that no row tests. With `Promise.all`, a failing stock request now reaches the `catch`: the cards are removed and `Could not load products.` is shown. Before the fix, the same failure was an unhandled rejection. No row exercises this, because `/api/stock` answers 200 in every mode. I recorded it in `VERDICTS.md` §10.6.
+
+Changed: nothing.
+
+Rejected: nothing rejected — all rows passed on the first attempt. My final re-run of the whole table after both fixes (`VERDICTS.md` §10.3) gave the same result.
+
+By hand: I wrote the one sentence from my §9 results, and I committed the fix myself as `b0b7f0e`.
+
+## 2026-11-04 — IA#3: fixing version B from my one sentence (rows 6 and 8)
+
+Tool: Claude Code (desktop app), model Claude Opus 5.5 (`claude-opus-5-5`), in a new session. It used the same tools as the A fix: the same Playwright script, adapted for `?v=b`, and `tsc` 6.0.3, all outside the repo.
+
+Asked for: *"Row 6: in mode `hang` the page still shows `Loading products…` with no Retry 22 s after reload, `/api/products` stays pending until the server's 504 at 30 s, and row 8 `tsc` reports TS2353 `'timeout' does not exist in type 'RequestInit'` — both come from `{ timeout: 5000 }` at b.js:16; make the products request really abort after 5 s with an AbortSignal so the catch shows `Could not load products.` and Retry, keep Retry and the parallel `Promise.all` stock requests as they are, and change only b.js."* After the fix it had to re-run the whole table on `?v=b`, as for A.
+
+Kept: the 1-line change at b.js:16. `{ timeout: 5000 }` became `{ signal: AbortSignal.timeout(5000) }`. On its re-run, `/api/products` was aborted at 5040 ms. `Could not load products.` + Retry showed at 5050 ms. The other rows still passed:
+- row 2: `12.360.000 đ` at 1013 ms;
+- parallel: stock requests started within 0.6 ms of each other.
+
+Row 8 gave `tsc` exit 0. It ran the same command on a scratch copy of the original b.js as a control, and that still gave TS2353, so the exit 0 really means the error is gone.
+
+Changed: nothing.
+
+Rejected: nothing rejected — all rows passed on the first attempt. My final re-run after both fixes (`VERDICTS.md` §10.4) gave the same result: the error showed at 5097 ms, after the abort at 5055 ms.
+
+By hand: I wrote the one sentence from my §9 results, and I committed the fix myself as `e83e623`.
