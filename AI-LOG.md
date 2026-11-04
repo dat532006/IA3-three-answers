@@ -39,3 +39,25 @@ Changed: Its screenshots of the failing rows showed only the page, with no DevTo
 Rejected: The JSON logs and duplicate screenshots it wrote into `evidence/run-2026-11-04/`. They are too long to be readable evidence, so I removed them from the submission and kept the numbers I need in `VERDICTS.md` §9.
 
 By hand: Nothing in this step. The script run was the assistant's work.
+
+## 2026-11-04 — IA#3: assistant review of the original A, B and C
+
+Tool: Claude Code (desktop app), model Claude Opus 5.5 (`claude-opus-5-5`), in a new session.
+
+Asked for: review a.js, b.js and c.js against brief.md, reading only those four files and without seeing my verdicts. It had to save the answer unedited in `ASSISTANT-REVIEW.md` first, and only then check each claim against the rows in `VERDICTS.md` §9.
+
+Kept: it found all three failing rows and gave the same verdicts as my table:
+- A row 2: `forEach(async …)` at a.js:51–56, giving `0 đ`.
+- B rows 6 and 8: `{ timeout: 5000 }` at b.js:16.
+- C: keep.
+
+Changed: it said B stays on `Loading products…` "forever". Row 6 shows the error does appear at about 30 s, when the server answers 504. That is still far past the 5 s limit, so the verdict stands, but the description was overstated.
+
+Rejected, all shown not to be real by a row:
+- The strict-mode type errors it expected in all three files: row 8 gave `tsc` exit 0 for A and C, and only TS2353 for B.
+- A B failure in `slow` mode "if the answer takes > 5 s": `slow` answers in 3 s, and row 4 passes.
+- Its doubt that the browser's own `GET … 500` line breaks the Console rule: README row 7 excludes it, and row 7 passes for all three.
+
+Its stock-failure points (A unhandled rejection, B/C behaviour when a stock request fails) are outside every row: in its own check `/api/stock` answered 200 in all five modes.
+
+By hand: I chose to run the review in a fresh session restricted to brief.md and the three files, and I read its claims table against my results before committing. No version file was changed.
