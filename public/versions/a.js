@@ -49,10 +49,10 @@ async function load() {
 
     // Stock for every product, requested at the same time.
     let total = 0;
-    products.forEach(async (p) => {
+    await Promise.all(products.map(async (p) => {
       const stock = await getStock(p.id);
       total += p.price * stock;
-    });
+    }));
     stockValue.textContent = formatVnd(total);
   } catch {
     list.replaceChildren();
