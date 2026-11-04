@@ -1,4 +1,4 @@
-AI-assisted predictions — accepted by the student; NOT_TESTED.
+AI-assisted predictions (§1–8, committed before any run in f05b449) + observed results (§9).
 
 # IA#3 — Predictions from static analysis
 
@@ -229,3 +229,84 @@ Read **§3.3–3.4** carefully (A: parallel initiation without waiting; row 7 do
 **Student acceptance — 2026-11-04 (Asia/Bangkok, UTC+7):** the student accepted the current 27 predictions and explicitly authorized updating this acceptance status, committing the two existing reports and pushing to `origin/main`. The predictions and qualifications remain unchanged: A provisionally requires a fix for row 2; B for rows 6 and 8; C is a conditional keep. No final runtime verdict or student-authored test observation is implied.
 
 At the original drafting handoff, the two draft files had been created in the working tree, **without a commit/push**, starter changes or testing. The student's subsequent instruction separately authorizes committing and pushing these reports. `AI-LOG.md` is retained unchanged at the student's request as the record of that original drafting session; its pending-review wording describes the earlier handoff. The current acceptance is recorded here. Git history and the publication handoff identify the resulting commit and remote verification. Testing remains **NOT_TESTED** and is not authorized by this publication instruction; it requires a separate testing task after the prediction commit has been confirmed.
+
+---
+
+# 9. Results — rows run against the original A, B and C
+
+The predictions above (§1–8) were committed in `f05b449` **before** any run and are left unchanged. This section holds what was actually observed. It supersedes the `NOT_TESTED` table in §7.
+
+**How the rows were run.**
+
+- Full matrix (rows 1–8, empty, parallel check) on 2026-11-04, 19:46–19:55 (UTC+7), by a Codex browser script I asked for: Playwright 1.62.1 driving Chrome 156, Disable cache on, no throttling, against the unmodified `node server.mjs` at `http://localhost:5050`. Row 8 used `tsc` 6.0.3 with the starter's `jsconfig.json`, with `// @ts-check` added as line 1 of one version file at a time and removed afterwards.
+- I reproduced the failing rows myself in Chrome with DevTools open: A row 2 at 20:31, B row 6 at 20:36, B row 8 in VS Code.
+- Screenshots in `evidence/`:
+  - `<v>-row<N>.png` are my own captures of the failing rows (page + DevTools).
+  - `<v>-normal/error/retry/hang/empty.png` are the script's captures of the page only, kept as supporting evidence for passing rows.
+
+**Prediction vs result.** All 27 predictions matched the results: A fails row 2; B fails rows 6 and 8; C passes everything. No row was corrected by the table. The only thing the predictions did not anticipate is that C's row 2 is close to the "wait a second" mark on one run (see C row 2).
+
+## 9.1 Version A — `public/versions/a.js`
+
+| Row | Result | What I saw |
+|---|---|---|
+| 1 | PASS | 8 cards in API order (tshirt … scarf), prices like `180.000 đ`, status line empty about 97 ms after load. |
+| 2 | **FAIL** | At 1 s Stock value is **`0 đ`** and it never changes. Network: `products` 200 and all 8 `/api/stock/…` requests 200 (232–671 ms, initiator `a.js:20`), Finish 901 ms; the value is still `0 đ` afterwards. Expected `12.360.000 đ`. Screenshot: `evidence/a-row2.png`. |
+| 3 | PASS | Last card reads `Scarf <i>limited</i>` with the brackets visible; `.name` has no child elements, so nothing is in italics. |
+| 4 | PASS | `Loading products…` from 70 ms to 3083 ms, then 8 cards and the status line clears. |
+| 5 | PASS | `error`: `Could not load products.`, Retry shown, 0 cards (127 ms). After switching to `normal` and pressing Retry: 8 cards, message and button gone. The total after Retry is again `0 đ`, which is the row 2 bug, not part of row 5. |
+| 6 | PASS | `hang`: `Loading products…` at 1 s; `Could not load products.` + Retry at 5.05 s. Network shows `/api/products` cancelled (`net::ERR_ABORTED`). |
+| 7 | PASS | No `Uncaught …` and nothing printed by `a.js`. Only browser-generated lines: `GET /api/products 500` in `error` mode, and DevTools' own `GET /.well-known/appspecific/com.chrome.devtools.json 404`. |
+| 8 | PASS | `tsc` with `// @ts-check` added: exit 0, no diagnostics. |
+| empty | PASS | `No products yet.`, Stock value `0 đ`, 0 cards, no stock requests. |
+| parallel | PASS | All 8 `/api/stock` requests start within 1.0 ms of each other (no staircase). |
+
+- **Line(s) responsible for row 2:** `a.js:51–56`. `products.forEach(async (p) => { … })` starts the 8 requests but `forEach` ignores the promises its callback returns. Line 56 therefore writes `formatVnd(total)` while `total` is still `0`, and the later `total += …` at line 54 only changes a variable that is never written to the page again.
+- **Verdict: fix**, decided by **row 2**. Everything else (cards, timeout, Retry, `textContent`) passes; only the stock total is wrong.
+- **One sentence for the assistant:** *"Row 2: in mode `normal` the Stock value stays `0 đ` even though all 8 `/api/stock` requests return 200 (the last at 671 ms) — `products.forEach(async …)` at a.js:52–55 is never awaited, so line 56 writes the total before any stock arrives; wait for all the stock results with `Promise.all` before writing the total, keep the 8 stock requests starting at the same time (no `await` inside a loop), and change only a.js."*
+
+## 9.2 Version B — `public/versions/b.js`
+
+| Row | Result | What I saw |
+|---|---|---|
+| 1 | PASS | 8 cards in API order, prices like `180.000 đ`, status line empty about 121 ms after load. |
+| 2 | PASS | `12.360.000 đ` at the 1 s check (written at 869 ms). |
+| 3 | PASS | `Scarf <i>limited</i>` shown literally; no child elements in `.name`. |
+| 4 | PASS | `Loading products…` from 78 ms to 3089 ms, then 8 cards and status clears; total `12.360.000 đ` at 3.85 s. |
+| 5 | PASS | `error`: `Could not load products.`, Retry shown, 0 cards (151 ms). After `normal` + Retry: 8 cards, message and button gone, `12.360.000 đ`. |
+| 6 | **FAIL** | `hang`: still **`Loading products…`**, Stock value `—` and **no Retry** at 1 s, 5 s, 7 s and, in my own run, about 22 s after a single reload. Network: `/api/products` **(pending)**, initiator `b.js:16`. Terminal: `GET /api/products [mode=hang] -> 504 30004 ms`. The page only shows `Could not load products.` at about 30 s (30.08 s in the script run), when the server gives up, not after 5 s. Screenshots: `evidence/b-row6.png` (mine), `evidence/b-hang-final.png` (script, after 30 s). |
+| 7 | PASS | No `Uncaught …`. Only the browser's own `GET /api/products 500` (`error`) and `GET /api/products 504` (`hang`, at 30 s). |
+| 8 | **FAIL** | `tsc` with `// @ts-check` as line 1: `public/versions/b.js(17,51): error TS2353: Object literal may only specify known properties, and 'timeout' does not exist in type 'RequestInit'.` Line 17 with the directive is line 16 of the original file. In VS Code: red underline on `timeout`. Screenshot: `evidence/b-row8.png`. |
+| empty | PASS | `No products yet.`, `0 đ`, 0 cards. |
+| parallel | PASS | All 8 `/api/stock` requests start within 0.5 ms of each other. |
+
+- **Line(s) responsible:** `b.js:16`, `fetch('/api/products', { timeout: 5000 })`. `fetch` has no `timeout` option, so the browser ignores it and nothing ever aborts the request (row 6). The type checker reports the same unknown property (row 8). The comment on line 15 says "Stop waiting after 5 seconds", but the code does not.
+- **Verdict: fix**, decided by **row 6** (row 8 has the same line as its cause). Rendering, Retry, the `Promise.all` total and the parallel stock requests all pass and should be kept.
+- **One sentence for the assistant:** *"Row 6: in mode `hang` the page still shows `Loading products…` with no Retry 22 s after reload, `/api/products` stays pending until the server's 504 at 30 s, and row 8 `tsc` reports TS2353 `'timeout' does not exist in type 'RequestInit'` — both come from `{ timeout: 5000 }` at b.js:16; make the products request really abort after 5 s with an AbortSignal so the catch shows `Could not load products.` and Retry, keep Retry and the parallel `Promise.all` stock requests as they are, and change only b.js."*
+
+## 9.3 Version C — `public/versions/c.js`
+
+| Row | Result | What I saw |
+|---|---|---|
+| 1 | PASS | 8 cards in API order, prices like `180.000 đ`, status line empty about 37 ms after load. |
+| 2 | PASS | `12.360.000 đ`. First run: at the 1.017 s check the value was still `—`, then `12.360.000 đ` at 1.040 s (the slowest stock request, `scarf`, finished at 1.038 s). I re-ran row 2 six more times: `12.360.000 đ` was shown at 693–982 ms, before the 1 s check every time. The value is always correct and appears about one second after load, as the row describes, so I count it as a pass. |
+| 3 | PASS | `Scarf <i>limited</i>` shown literally; no child elements in `.name`. |
+| 4 | PASS | `Loading products…` from 31 ms to 3045 ms, then 8 cards and status clears; total at 3.62 s. |
+| 5 | PASS | `error`: `Could not load products.`, Retry shown, 0 cards (172 ms). After `normal` + Retry: 8 cards, message and button gone, `12.360.000 đ`. |
+| 6 | PASS | `hang`: `Loading products…` at 1 s; `Could not load products.` + Retry at 5.08 s; `/api/products` cancelled (`net::ERR_ABORTED`). |
+| 7 | PASS | No `Uncaught …`. Only the browser's own `GET /api/products 500`. |
+| 8 | PASS | `tsc` with `// @ts-check` added: exit 0, no diagnostics. |
+| empty | PASS | `No products yet.`, `0 đ`, 0 cards. |
+| parallel | PASS | All 8 `/api/stock` requests start within 1.3 ms of each other. |
+
+- **Line(s) responsible:** none; no row failed.
+- **Verdict: keep**, decided by rows 1–8, empty and the parallel check all passing. Row 2 was the closest call and passed on re-runs.
+- **One sentence for the assistant:** *"Keep version C unchanged: it passed rows 1–8, empty and the parallel stock check, so do not touch c.js."*
+
+## 9.4 Summary
+
+| Version | Failed rows | Verdict | Deciding row |
+|---|---|---|---|
+| A | 2 | fix | 2 |
+| B | 6, 8 | fix | 6 (8 has the same cause) |
+| C | none | keep | all rows pass |
